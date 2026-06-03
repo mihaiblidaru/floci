@@ -2,6 +2,10 @@ package io.github.hectorvent.floci.services.eks;
 
 import io.github.hectorvent.floci.services.eks.model.Cluster;
 import io.github.hectorvent.floci.services.eks.model.CreateClusterRequest;
+import io.github.hectorvent.floci.services.eks.model.CreateFargateProfileRequest;
+import io.github.hectorvent.floci.services.eks.model.CreateNodeGroupRequest;
+import io.github.hectorvent.floci.services.eks.model.FargateProfile;
+import io.github.hectorvent.floci.services.eks.model.NodeGroup;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
@@ -20,47 +24,112 @@ import java.util.Map;
 /**
  * EKS REST-JSON controller.
  *
- * <p>EKS uses standard HTTP verbs with JSON bodies — not JSON 1.1 (X-Amz-Target) or Query protocol.
+ * <p>
+ * EKS uses standard HTTP verbs with JSON bodies — not JSON 1.1 (X-Amz-Target)
+ * or Query protocol.
  */
 @Path("/")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 public class EksController {
 
-    private final EksService eksService;
+  private final EksService eksService;
 
-    @Inject
-    public EksController(EksService eksService) {
-        this.eksService = eksService;
-    }
+  @Inject
+  public EksController(EksService eksService) {
+    this.eksService = eksService;
+  }
 
-    @POST
-    @Path("/clusters")
-    public Response createCluster(CreateClusterRequest request) {
-        Cluster cluster = eksService.createCluster(request);
-        return Response.ok(Map.of("cluster", cluster)).build();
-    }
+  @POST
+  @Path("/clusters")
+  public Response createCluster(CreateClusterRequest request) {
+    Cluster cluster = eksService.createCluster(request);
+    return Response.ok(Map.of("cluster", cluster)).build();
+  }
 
-    @GET
-    @Path("/clusters")
-    public Response listClusters(@QueryParam("nextToken") String nextToken,
-                                 @QueryParam("maxResults") Integer maxResults) {
-        List<String> clusterNames = eksService.listClusters();
-        return Response.ok(Map.of("clusters", clusterNames)).build();
-    }
+  @GET
+  @Path("/clusters")
+  public Response listClusters(@QueryParam("nextToken") String nextToken,
+      @QueryParam("maxResults") Integer maxResults) {
+    List<String> clusterNames = eksService.listClusters();
+    return Response.ok(Map.of("clusters", clusterNames)).build();
+  }
 
-    @GET
-    @Path("/clusters/{name}")
-    public Response describeCluster(@PathParam("name") String name) {
-        Cluster cluster = eksService.describeCluster(name);
-        return Response.ok(Map.of("cluster", cluster)).build();
-    }
+  @GET
+  @Path("/clusters/{name}")
+  public Response describeCluster(@PathParam("name") String name) {
+    Cluster cluster = eksService.describeCluster(name);
+    return Response.ok(Map.of("cluster", cluster)).build();
+  }
 
-    @DELETE
-    @Path("/clusters/{name}")
-    public Response deleteCluster(@PathParam("name") String name) {
-        Cluster cluster = eksService.deleteCluster(name);
-        return Response.ok(Map.of("cluster", cluster)).build();
-    }
+  @DELETE
+  @Path("/clusters/{name}")
+  public Response deleteCluster(@PathParam("name") String name) {
+    Cluster cluster = eksService.deleteCluster(name);
+    return Response.ok(Map.of("cluster", cluster)).build();
+  }
 
+  @POST
+  @Path("/clusters/{name}/nodegroups")
+  public Response createNodeGroup(@PathParam("name") String name, CreateNodeGroupRequest request) {
+    NodeGroup nodeGroup = eksService.createNodeGroup(name, request);
+    return Response.ok(Map.of("nodegroup", nodeGroup)).build();
+  }
+
+  @GET
+  @Path("/clusters/{name}/nodegroups")
+  public Response listNodeGroups(@PathParam("name") String name,
+      @QueryParam("nextToken") String nextToken,
+      @QueryParam("maxResults") Integer maxResults) {
+    List<String> nodeGroupNames = eksService.listNodeGroups(name);
+    return Response.ok(Map.of("nodegroups", nodeGroupNames)).build();
+  }
+
+  @GET
+  @Path("/clusters/{name}/nodegroups/{nodegroupName}")
+  public Response describeNodeGroup(@PathParam("name") String name,
+      @PathParam("nodegroupName") String nodegroupName) {
+    NodeGroup nodeGroup = eksService.describeNodeGroup(name, nodegroupName);
+    return Response.ok(Map.of("nodegroup", nodeGroup)).build();
+  }
+
+  @DELETE
+  @Path("/clusters/{name}/nodegroups/{nodegroupName}")
+  public Response deleteNodeGroup(@PathParam("name") String name,
+      @PathParam("nodegroupName") String nodegroupName) {
+    NodeGroup nodeGroup = eksService.deleteNodeGroup(name, nodegroupName);
+    return Response.ok(Map.of("nodegroup", nodeGroup)).build();
+  }
+
+  @POST
+  @Path("/clusters/{name}/fargate-profiles")
+  public Response createFargateProfile(@PathParam("name") String name, CreateFargateProfileRequest request) {
+    FargateProfile profile = eksService.createFargateProfile(name, request);
+    return Response.ok(Map.of("fargateProfile", profile)).build();
+  }
+
+  @GET
+  @Path("/clusters/{name}/fargate-profiles")
+  public Response listFargateProfiles(@PathParam("name") String name,
+      @QueryParam("nextToken") String nextToken,
+      @QueryParam("maxResults") Integer maxResults) {
+    List<String> profileNames = eksService.listFargateProfiles(name);
+    return Response.ok(Map.of("fargateProfileNames", profileNames)).build();
+  }
+
+  @GET
+  @Path("/clusters/{name}/fargate-profiles/{fargateProfileName}")
+  public Response describeFargateProfile(@PathParam("name") String name,
+      @PathParam("fargateProfileName") String fargateProfileName) {
+    FargateProfile profile = eksService.describeFargateProfile(name, fargateProfileName);
+    return Response.ok(Map.of("fargateProfile", profile)).build();
+  }
+
+  @DELETE
+  @Path("/clusters/{name}/fargate-profiles/{fargateProfileName}")
+  public Response deleteFargateProfile(@PathParam("name") String name,
+      @PathParam("fargateProfileName") String fargateProfileName) {
+    FargateProfile profile = eksService.deleteFargateProfile(name, fargateProfileName);
+    return Response.ok(Map.of("fargateProfile", profile)).build();
+  }
 }
