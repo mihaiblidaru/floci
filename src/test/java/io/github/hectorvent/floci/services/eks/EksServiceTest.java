@@ -51,6 +51,34 @@ class EksServiceTest {
         eksService = new EksService(storageFactory, config, regionResolver, clusterManager);
     }
 
+    private void createTestCluster(String name) {
+        CreateClusterRequest clusterRequest = new CreateClusterRequest();
+        clusterRequest.setName(name);
+        clusterRequest.setRoleArn("arn:aws:iam::000000000000:role/eks-role");
+        eksService.createCluster(clusterRequest);
+    }
+
+    private CreateNodeGroupRequest nodeGroupRequest(String name) {
+        CreateNodeGroupRequest request = new CreateNodeGroupRequest();
+        request.setNodegroupName(name);
+        request.setNodeRole("arn:aws:iam::000000000000:role/role-name");
+        request.setSubnets(List.of("subnet-0e2907431c9988b72", "subnet-04ad87f71c6e5ab4d"));
+        return request;
+    }
+
+    private CreateFargateProfileRequest fargateProfileRequest(String name) {
+        FargateProfile.Selector selector = new FargateProfile.Selector();
+        selector.setNamespace("default");
+        selector.setLabels(Map.of("app", "api"));
+
+        CreateFargateProfileRequest request = new CreateFargateProfileRequest();
+        request.setFargateProfileName(name);
+        request.setPodExecutionRoleArn("arn:aws:iam::000000000000:role/eks-fargate-role");
+        request.setSubnets(List.of("subnet-0e2907431c9988b72", "subnet-04ad87f71c6e5ab4d"));
+        request.setSelectors(List.of(selector));
+        return request;
+    }
+
     @Test
     void createCluster() {
         CreateClusterRequest req = new CreateClusterRequest();
@@ -152,10 +180,7 @@ class EksServiceTest {
 
     @Test
     void createNodeGroupIncludesAwsShapeFields() {
-        CreateClusterRequest clusterRequest = new CreateClusterRequest();
-        clusterRequest.setName("my-eks-cluster");
-        clusterRequest.setRoleArn("arn:aws:iam::000000000000:role/eks-role");
-        eksService.createCluster(clusterRequest);
+        createTestCluster("my-eks-cluster");
 
         NodeGroup.ScalingConfig scalingConfig = new NodeGroup.ScalingConfig();
         scalingConfig.setMinSize(1);
@@ -189,21 +214,71 @@ class EksServiceTest {
     }
 
     @Test
+    void nodeGroupLifecycleDescribeListDelete() {
+        createTestCluster("my-eks-cluster");
+        eksService.createNodeGroup("my-eks-cluster", nodeGroupRequest("nodegroup-a"));
+        eksService.createNodeGroup("my-eks-cluster", nodeGroupRequest("nodegroup-b"));
+
+        List<String> names = eksService.listNodeGroups("my-eks-cluster");
+        assertEquals(2, names.size());
+        assertTrue(names.contains("nodegroup-a"));
+        assertTrue(names.contains("nodegroup-b"));
+
+        NodeGroup described = eksService.describeNodeGroup("my-eks-cluster", "nodegroup-a");
+        assertEquals("nodegroup-a", described.getNodegroupName());
+
+        NodeGroup deleted = eksService.deleteNodeGroup("my-eks-cluster", "nodegroup-a");
+        assertEquals(NodeGroupStatus.DELETING, deleted.getStatus());
+        assertThrows(AwsException.class, () -> eksService.describeNodeGroup("my-eks-cluster", "nodegroup-a"));
+        assertEquals(List.of("nodegroup-b"), eksService.listNodeGroups("my-eks-cluster"));
+    }
+
+    @Test
+    void createNodeGroupDuplicateFails() {
+        createTestCluster("my-eks-cluster");
+        CreateNodeGroupRequest request = nodeGroupRequest("my-eks-nodegroup");
+        eksService.createNodeGroup("my-eks-cluster", request);
+
+        AwsException ex = assertThrows(AwsException.class,
+                () -> eksService.createNodeGroup("my-eks-cluster", request));
+        assertEquals(409, ex.getHttpStatus());
+    }
+
+    @Test
+    void createNodeGroupWithoutClusterFails() {
+        AwsException ex = assertThrows(AwsException.class,
+                () -> eksService.createNodeGroup("missing-cluster", nodeGroupRequest("my-eks-nodegroup")));
+        assertEquals(404, ex.getHttpStatus());
+    }
+
+    @Test
+    void createNodeGroupWithoutNameFails() {
+        createTestCluster("my-eks-cluster");
+        CreateNodeGroupRequest request = nodeGroupRequest("");
+
+        AwsException ex = assertThrows(AwsException.class,
+                () -> eksService.createNodeGroup("my-eks-cluster", request));
+        assertEquals(400, ex.getHttpStatus());
+    }
+
+    @Test
+    void describeAndDeleteNodeGroupNotFoundFail() {
+        createTestCluster("my-eks-cluster");
+
+        AwsException describe = assertThrows(AwsException.class,
+                () -> eksService.describeNodeGroup("my-eks-cluster", "missing-nodegroup"));
+        assertEquals(404, describe.getHttpStatus());
+
+        AwsException delete = assertThrows(AwsException.class,
+                () -> eksService.deleteNodeGroup("my-eks-cluster", "missing-nodegroup"));
+        assertEquals(404, delete.getHttpStatus());
+    }
+
+    @Test
     void createFargateProfileIncludesAwsShapeFields() {
-        CreateClusterRequest clusterRequest = new CreateClusterRequest();
-        clusterRequest.setName("my-eks-cluster");
-        clusterRequest.setRoleArn("arn:aws:iam::000000000000:role/eks-role");
-        eksService.createCluster(clusterRequest);
+        createTestCluster("my-eks-cluster");
 
-        FargateProfile.Selector selector = new FargateProfile.Selector();
-        selector.setNamespace("default");
-        selector.setLabels(Map.of("app", "api"));
-
-        CreateFargateProfileRequest profileRequest = new CreateFargateProfileRequest();
-        profileRequest.setFargateProfileName("my-fargate-profile");
-        profileRequest.setPodExecutionRoleArn("arn:aws:iam::000000000000:role/eks-fargate-role");
-        profileRequest.setSubnets(List.of("subnet-0e2907431c9988b72", "subnet-04ad87f71c6e5ab4d"));
-        profileRequest.setSelectors(List.of(selector));
+        CreateFargateProfileRequest profileRequest = fargateProfileRequest("my-fargate-profile");
         profileRequest.setTags(Map.of("env", "test"));
 
         FargateProfile profile = eksService.createFargateProfile("my-eks-cluster", profileRequest);
@@ -219,5 +294,66 @@ class EksServiceTest {
         assertTrue(profile.getHealth().getIssues().isEmpty());
         assertEquals("test", profile.getTags().get("env"));
         assertEquals("my-fargate-profile", eksService.listFargateProfiles("my-eks-cluster").getFirst());
+    }
+
+    @Test
+    void fargateProfileLifecycleDescribeListDelete() {
+        createTestCluster("my-eks-cluster");
+        eksService.createFargateProfile("my-eks-cluster", fargateProfileRequest("profile-a"));
+        eksService.createFargateProfile("my-eks-cluster", fargateProfileRequest("profile-b"));
+
+        List<String> names = eksService.listFargateProfiles("my-eks-cluster");
+        assertEquals(2, names.size());
+        assertTrue(names.contains("profile-a"));
+        assertTrue(names.contains("profile-b"));
+
+        FargateProfile described = eksService.describeFargateProfile("my-eks-cluster", "profile-a");
+        assertEquals("profile-a", described.getFargateProfileName());
+
+        FargateProfile deleted = eksService.deleteFargateProfile("my-eks-cluster", "profile-a");
+        assertEquals(FargateProfileStatus.DELETING, deleted.getStatus());
+        assertThrows(AwsException.class, () -> eksService.describeFargateProfile("my-eks-cluster", "profile-a"));
+        assertEquals(List.of("profile-b"), eksService.listFargateProfiles("my-eks-cluster"));
+    }
+
+    @Test
+    void createFargateProfileDuplicateFails() {
+        createTestCluster("my-eks-cluster");
+        CreateFargateProfileRequest request = fargateProfileRequest("my-fargate-profile");
+        eksService.createFargateProfile("my-eks-cluster", request);
+
+        AwsException ex = assertThrows(AwsException.class,
+                () -> eksService.createFargateProfile("my-eks-cluster", request));
+        assertEquals(409, ex.getHttpStatus());
+    }
+
+    @Test
+    void createFargateProfileWithoutClusterFails() {
+        AwsException ex = assertThrows(AwsException.class,
+                () -> eksService.createFargateProfile("missing-cluster", fargateProfileRequest("my-fargate-profile")));
+        assertEquals(404, ex.getHttpStatus());
+    }
+
+    @Test
+    void createFargateProfileWithoutNameFails() {
+        createTestCluster("my-eks-cluster");
+        CreateFargateProfileRequest request = fargateProfileRequest("");
+
+        AwsException ex = assertThrows(AwsException.class,
+                () -> eksService.createFargateProfile("my-eks-cluster", request));
+        assertEquals(400, ex.getHttpStatus());
+    }
+
+    @Test
+    void describeAndDeleteFargateProfileNotFoundFail() {
+        createTestCluster("my-eks-cluster");
+
+        AwsException describe = assertThrows(AwsException.class,
+                () -> eksService.describeFargateProfile("my-eks-cluster", "missing-profile"));
+        assertEquals(404, describe.getHttpStatus());
+
+        AwsException delete = assertThrows(AwsException.class,
+                () -> eksService.deleteFargateProfile("my-eks-cluster", "missing-profile"));
+        assertEquals(404, delete.getHttpStatus());
     }
 }
