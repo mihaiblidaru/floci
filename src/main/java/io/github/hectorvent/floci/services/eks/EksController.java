@@ -5,7 +5,7 @@ import io.github.hectorvent.floci.services.eks.model.CreateClusterRequest;
 import io.github.hectorvent.floci.services.eks.model.CreateFargateProfileRequest;
 import io.github.hectorvent.floci.services.eks.model.CreateNodeGroupRequest;
 import io.github.hectorvent.floci.services.eks.model.FargateProfile;
-import io.github.hectorvent.floci.services.eks.model.NodeGroup;
+import io.github.hectorvent.floci.services.eks.model.Nodegroup;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
@@ -68,32 +68,32 @@ public class EksController {
   }
 
   @POST
-  @Path("/clusters/{name}/nodegroups")
+  @Path("/clusters/{name}/node-groups")
   public Response createNodeGroup(@PathParam("name") String name, CreateNodeGroupRequest request) {
-    NodeGroup nodeGroup = eksService.createNodeGroup(name, request);
+    Nodegroup nodeGroup = eksService.createNodeGroup(name, request);
     return Response.ok(Map.of("nodegroup", nodeGroup)).build();
   }
 
   @GET
-  @Path("/clusters/{name}/nodegroups")
+  @Path("/clusters/{name}/node-groups")
   public Response listNodeGroups(@PathParam("name") String name) {
     List<String> nodeGroupNames = eksService.listNodeGroups(name);
     return Response.ok(Map.of("nodegroups", nodeGroupNames)).build();
   }
 
   @GET
-  @Path("/clusters/{name}/nodegroups/{nodegroupName}")
+  @Path("/clusters/{name}/node-groups/{nodegroupName}")
   public Response describeNodeGroup(@PathParam("name") String name,
       @PathParam("nodegroupName") String nodegroupName) {
-    NodeGroup nodeGroup = eksService.describeNodeGroup(name, nodegroupName);
+    Nodegroup nodeGroup = eksService.describeNodeGroup(name, nodegroupName);
     return Response.ok(Map.of("nodegroup", nodeGroup)).build();
   }
 
   @DELETE
-  @Path("/clusters/{name}/nodegroups/{nodegroupName}")
+  @Path("/clusters/{name}/node-groups/{nodegroupName}")
   public Response deleteNodeGroup(@PathParam("name") String name,
       @PathParam("nodegroupName") String nodegroupName) {
-    NodeGroup nodeGroup = eksService.deleteNodeGroup(name, nodegroupName);
+    Nodegroup nodeGroup = eksService.deleteNodeGroup(name, nodegroupName);
     return Response.ok(Map.of("nodegroup", nodeGroup)).build();
   }
 

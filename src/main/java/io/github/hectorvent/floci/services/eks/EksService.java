@@ -46,7 +46,7 @@ public class EksService implements TagHandler {
   private static final Logger LOG = Logger.getLogger(EksService.class);
 
   private final StorageBackend<String, Cluster> storage;
-  private final StorageBackend<String, NodeGroup> nodeGroupStorage;
+  private final StorageBackend<String, Nodegroup> nodeGroupStorage;
   private final StorageBackend<String, FargateProfile> fargateProfileStorage;
   private final EmulatorConfig config;
   private final RegionResolver regionResolver;
@@ -60,7 +60,7 @@ public class EksService implements TagHandler {
         new TypeReference<Map<String, Cluster>>() {
         });
     this.nodeGroupStorage = storageFactory.create("eks", "eks-nodegroups.json",
-        new TypeReference<Map<String, NodeGroup>>() {
+        new TypeReference<Map<String, Nodegroup>>() {
         });
     this.fargateProfileStorage = storageFactory.create("eks", "eks-fargate-profiles.json",
         new TypeReference<Map<String, FargateProfile>>() {
@@ -156,7 +156,26 @@ public class EksService implements TagHandler {
     return cluster;
   }
 
-  public NodeGroup createNodeGroup(String clusterName, CreateNodeGroupRequest request) {
+  public Nodegroup createNodeGroup(String clusterName, CreateNodeGroupRequest request) {
+    Nodegroup nodegroup = new Nodegroup();
+    nodegroup.setNodegroupName(request.getNodegroupName());
+    nodegroup.setVersion(request.getVersion());
+    nodegroup.setReleaseVersion(request.getReleaseVersion());
+    nodegroup.setSubnets(request.getSubnets());
+    nodegroup.setNodeRole(request.getNodeRole());
+    nodegroup.setAmiType(request.getAmiType());
+    nodegroup.setCapacityType(request.getCapacityType());
+    nodegroup.setDiskSize(request.getDiskSize());
+    nodegroup.setInstanceTypes(request.getInstanceTypes());
+    nodegroup.setScalingConfig(request.getScalingConfig());
+    nodegroup.setUpdateConfig(request.getUpdateConfig());
+    nodegroup.setLabels(request.getLabels());
+    nodegroup.setTags(request.getTags());
+    nodegroup.setClientRequestToken(request.getClientRequestToken());
+    return createNodegroup(clusterName, nodegroup);
+  }
+
+  public Nodegroup createNodegroup(String clusterName, Nodegroup request) {
     describeCluster(clusterName);
 
     String nodegroupName = request.getNodegroupName();
@@ -177,7 +196,7 @@ public class EksService implements TagHandler {
         "nodegroup/" + clusterName + "/" + nodegroupName + "/" + id).toString();
 
     Instant now = Instant.now();
-    NodeGroup nodeGroup = new NodeGroup();
+    Nodegroup nodeGroup = new Nodegroup();
     nodeGroup.setNodegroupName(nodegroupName);
     nodeGroup.setNodegroupArn(arn);
     nodeGroup.setClusterName(clusterName);
@@ -186,7 +205,7 @@ public class EksService implements TagHandler {
     nodeGroup.setModifiedAt(now);
     nodeGroup.setVersion(request.getVersion() != null ? request.getVersion() : "1.29");
     nodeGroup.setReleaseVersion(request.getReleaseVersion());
-    nodeGroup.setStatus(NodeGroupStatus.CREATING);
+    nodeGroup.setStatus(NodegroupStatus.CREATING);
     nodeGroup.setCapacityType(request.getCapacityType() != null ? request.getCapacityType() : "ON_DEMAND");
     nodeGroup.setScalingConfig(request.getScalingConfig() != null ? request.getScalingConfig() : defaultScalingConfig());
     nodeGroup.setInstanceTypes(request.getInstanceTypes() != null ? request.getInstanceTypes() : List.of("t3.medium"));
@@ -203,27 +222,39 @@ public class EksService implements TagHandler {
     return nodeGroup;
   }
 
-  public NodeGroup describeNodeGroup(String clusterName, String nodegroupName) {
+  public Nodegroup describeNodeGroup(String clusterName, String nodegroupName) {
     describeCluster(clusterName);
     return nodeGroupStorage.get(nodeGroupKey(clusterName, nodegroupName))
         .orElseThrow(() -> new AwsException("ResourceNotFoundException",
             "No nodegroup found for name: " + nodegroupName, 404));
   }
 
+  public Nodegroup describeNodegroup(String clusterName, String nodegroupName) {
+    return describeNodeGroup(clusterName, nodegroupName);
+  }
+
   public List<String> listNodeGroups(String clusterName) {
     describeCluster(clusterName);
     String prefix = clusterName + "/";
     return nodeGroupStorage.scan(key -> key.startsWith(prefix)).stream()
-        .map(NodeGroup::getNodegroupName)
+        .map(Nodegroup::getNodegroupName)
         .collect(Collectors.toList());
   }
 
-  public NodeGroup deleteNodeGroup(String clusterName, String nodegroupName) {
-    NodeGroup nodeGroup = describeNodeGroup(clusterName, nodegroupName);
-    nodeGroup.setStatus(NodeGroupStatus.DELETING);
+  public List<String> listNodegroups(String clusterName) {
+    return listNodeGroups(clusterName);
+  }
+
+  public Nodegroup deleteNodeGroup(String clusterName, String nodegroupName) {
+    Nodegroup nodeGroup = describeNodeGroup(clusterName, nodegroupName);
+    nodeGroup.setStatus(NodegroupStatus.DELETING);
     nodeGroup.setModifiedAt(Instant.now());
     nodeGroupStorage.delete(nodeGroupKey(clusterName, nodegroupName));
     return nodeGroup;
+  }
+
+  public Nodegroup deleteNodegroup(String clusterName, String nodegroupName) {
+    return deleteNodeGroup(clusterName, nodegroupName);
   }
 
   public FargateProfile createFargateProfile(String clusterName, CreateFargateProfileRequest request) {
@@ -391,24 +422,20 @@ public class EksService implements TagHandler {
     return clusterName + "/" + fargateProfileName;
   }
 
-  private NodeGroup.ScalingConfig defaultScalingConfig() {
-    NodeGroup.ScalingConfig scalingConfig = new NodeGroup.ScalingConfig();
+  private NodegroupScalingConfig defaultScalingConfig() {
+    NodegroupScalingConfig scalingConfig = new NodegroupScalingConfig();
     scalingConfig.setMinSize(1);
     scalingConfig.setMaxSize(1);
     scalingConfig.setDesiredSize(1);
     return scalingConfig;
   }
 
-  private NodeGroup.UpdateConfig defaultUpdateConfig() {
-    NodeGroup.UpdateConfig updateConfig = new NodeGroup.UpdateConfig();
-    updateConfig.setMaxUnavailable(1);
-    return updateConfig;
+  private Map<String, Integer> defaultUpdateConfig() {
+    return Map.of("maxUnavailable", 1);
   }
 
-  private NodeGroup.Health defaultNodeGroupHealth() {
-    NodeGroup.Health health = new NodeGroup.Health();
-    health.setIssues(List.of());
-    return health;
+  private Map<String, List<Object>> defaultNodeGroupHealth() {
+    return Map.of("issues", List.of());
   }
 
   private FargateProfile.Health defaultFargateProfileHealth() {

@@ -13,8 +13,9 @@ import io.github.hectorvent.floci.services.eks.model.CreateNodeGroupRequest;
 import io.github.hectorvent.floci.services.eks.model.FargateProfile;
 import io.github.hectorvent.floci.services.eks.model.FargateProfileStatus;
 import io.github.hectorvent.floci.services.eks.model.Cluster;
-import io.github.hectorvent.floci.services.eks.model.NodeGroup;
-import io.github.hectorvent.floci.services.eks.model.NodeGroupStatus;
+import io.github.hectorvent.floci.services.eks.model.Nodegroup;
+import io.github.hectorvent.floci.services.eks.model.NodegroupScalingConfig;
+import io.github.hectorvent.floci.services.eks.model.NodegroupStatus;
 import com.fasterxml.jackson.core.type.TypeReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -234,7 +235,7 @@ class EksServiceTest {
     void createNodeGroupIncludesAwsShapeFields() {
         createTestCluster("my-eks-cluster");
 
-        NodeGroup.ScalingConfig scalingConfig = new NodeGroup.ScalingConfig();
+        NodegroupScalingConfig scalingConfig = new NodegroupScalingConfig();
         scalingConfig.setMinSize(1);
         scalingConfig.setMaxSize(3);
         scalingConfig.setDesiredSize(1);
@@ -248,20 +249,20 @@ class EksServiceTest {
         nodeGroupRequest.setSubnets(List.of("subnet-0e2907431c9988b72", "subnet-04ad87f71c6e5ab4d"));
         nodeGroupRequest.setInstanceTypes(List.of("t3.medium"));
 
-        NodeGroup nodeGroup = eksService.createNodeGroup("my-eks-cluster", nodeGroupRequest);
+        Nodegroup nodeGroup = eksService.createNodeGroup("my-eks-cluster", nodeGroupRequest);
 
         assertEquals("my-eks-nodegroup", nodeGroup.getNodegroupName());
         assertTrue(nodeGroup.getNodegroupArn().contains("nodegroup/my-eks-cluster/my-eks-nodegroup"));
         assertEquals("my-eks-cluster", nodeGroup.getClusterName());
-        assertEquals(NodeGroupStatus.CREATING, nodeGroup.getStatus());
+        assertEquals(NodegroupStatus.CREATING, nodeGroup.getStatus());
         assertEquals("ON_DEMAND", nodeGroup.getCapacityType());
         assertEquals(3, nodeGroup.getScalingConfig().getMaxSize());
         assertEquals(List.of("t3.medium"), nodeGroup.getInstanceTypes());
         assertEquals("AL2_x86_64", nodeGroup.getAmiType());
         assertEquals("arn:aws:iam::000000000000:role/role-name", nodeGroup.getNodeRole());
         assertEquals(20, nodeGroup.getDiskSize());
-        assertTrue(nodeGroup.getHealth().getIssues().isEmpty());
-        assertEquals(1, nodeGroup.getUpdateConfig().getMaxUnavailable());
+        assertEquals(List.of(), ((Map<?, ?>) nodeGroup.getHealth()).get("issues"));
+        assertEquals(1, ((Map<?, ?>) nodeGroup.getUpdateConfig()).get("maxUnavailable"));
         assertEquals("my-eks-nodegroup", eksService.listNodeGroups("my-eks-cluster").getFirst());
     }
 
@@ -276,11 +277,11 @@ class EksServiceTest {
         assertTrue(names.contains("nodegroup-a"));
         assertTrue(names.contains("nodegroup-b"));
 
-        NodeGroup described = eksService.describeNodeGroup("my-eks-cluster", "nodegroup-a");
+        Nodegroup described = eksService.describeNodeGroup("my-eks-cluster", "nodegroup-a");
         assertEquals("nodegroup-a", described.getNodegroupName());
 
-        NodeGroup deleted = eksService.deleteNodeGroup("my-eks-cluster", "nodegroup-a");
-        assertEquals(NodeGroupStatus.DELETING, deleted.getStatus());
+        Nodegroup deleted = eksService.deleteNodeGroup("my-eks-cluster", "nodegroup-a");
+        assertEquals(NodegroupStatus.DELETING, deleted.getStatus());
         assertThrows(AwsException.class, () -> eksService.describeNodeGroup("my-eks-cluster", "nodegroup-a"));
         assertEquals(List.of("nodegroup-b"), eksService.listNodeGroups("my-eks-cluster"));
     }

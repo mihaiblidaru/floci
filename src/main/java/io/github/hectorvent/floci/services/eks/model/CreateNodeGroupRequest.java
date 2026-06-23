@@ -39,10 +39,10 @@ public class CreateNodeGroupRequest {
     private List<String> instanceTypes;
 
     @JsonProperty("scalingConfig")
-    private NodeGroup.ScalingConfig scalingConfig;
+    private NodegroupScalingConfig scalingConfig;
 
     @JsonProperty("updateConfig")
-    private NodeGroup.UpdateConfig updateConfig;
+    private Object updateConfig;
 
     @JsonProperty("labels")
     private Map<String, String> labels;
@@ -82,11 +82,11 @@ public class CreateNodeGroupRequest {
     public List<String> getInstanceTypes() { return instanceTypes; }
     public void setInstanceTypes(List<String> instanceTypes) { this.instanceTypes = instanceTypes; }
 
-    public NodeGroup.ScalingConfig getScalingConfig() { return scalingConfig; }
-    public void setScalingConfig(NodeGroup.ScalingConfig scalingConfig) { this.scalingConfig = scalingConfig; }
+    public NodegroupScalingConfig getScalingConfig() { return scalingConfig; }
+    public void setScalingConfig(NodegroupScalingConfig scalingConfig) { this.scalingConfig = scalingConfig; }
 
-    public NodeGroup.UpdateConfig getUpdateConfig() { return updateConfig; }
-    public void setUpdateConfig(NodeGroup.UpdateConfig updateConfig) { this.updateConfig = updateConfig; }
+    public Object getUpdateConfig() { return updateConfig; }
+    public void setUpdateConfig(Object updateConfig) { this.updateConfig = updateConfig; }
 
     public Map<String, String> getLabels() { return labels; }
     public void setLabels(Map<String, String> labels) { this.labels = labels; }
