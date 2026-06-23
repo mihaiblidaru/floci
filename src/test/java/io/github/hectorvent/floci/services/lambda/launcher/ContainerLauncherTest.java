@@ -5,6 +5,7 @@ import io.github.hectorvent.floci.core.common.dns.EmbeddedDnsServer;
 import io.github.hectorvent.floci.core.common.docker.ContainerBuilder;
 import io.github.hectorvent.floci.core.common.docker.ContainerLifecycleManager;
 import io.github.hectorvent.floci.core.common.docker.ContainerLogStreamer;
+import io.github.hectorvent.floci.core.common.docker.ContainerReachableEndpoint;
 import io.github.hectorvent.floci.core.common.docker.ContainerSpec;
 import io.github.hectorvent.floci.core.common.docker.DockerHostResolver;
 import io.github.hectorvent.floci.services.ecr.registry.EcrRegistryManager;
@@ -75,9 +76,11 @@ class ContainerLauncherTest {
         when(embeddedDnsServer.getServerIp()).thenReturn(Optional.empty());
 
         ContainerBuilder containerBuilder = new ContainerBuilder(config, dockerHostResolver, embeddedDnsServer);
+        ContainerReachableEndpoint reachableEndpoint =
+                new ContainerReachableEndpoint(config, dockerHostResolver, embeddedDnsServer);
         launcher = new ContainerLauncher(containerBuilder, lifecycleManager, logStreamer, imageResolver,
-                runtimeApiServerFactory, dockerHostResolver, config, ecrRegistryManager, embeddedDnsServer,
-                mock(io.github.hectorvent.floci.services.lambda.LambdaLayerService.class));
+                runtimeApiServerFactory, dockerHostResolver, config, ecrRegistryManager,
+                mock(io.github.hectorvent.floci.services.lambda.LambdaLayerService.class), reachableEndpoint);
 
         when(runtimeApiServerFactory.create()).thenReturn(runtimeApiServer);
         when(runtimeApiServer.getPort()).thenReturn(9000);
@@ -95,7 +98,7 @@ class ContainerLauncherTest {
         // prevent the background PipedOutputStream writer thread from blocking
         // when the pipe buffer fills.
         capturedRemotePaths.clear();
-        when(dockerClient.copyArchiveToContainerCmd(any())).thenAnswer(inv -> {
+        lenient().when(dockerClient.copyArchiveToContainerCmd(any())).thenAnswer(inv -> {
             CopyArchiveToContainerCmd cmd = mock(CopyArchiveToContainerCmd.class);
             final java.io.InputStream[] captured = {null};
             when(cmd.withRemotePath(any())).thenAnswer(pathInv -> {
@@ -305,6 +308,46 @@ class ContainerLauncherTest {
         // AWS_SESSION_TOKEN was not overridden so the default remains.
         assertEquals(1, env.stream().filter(e -> e.startsWith("AWS_SESSION_TOKEN=")).count(),
                 "AWS_SESSION_TOKEN should retain its default exactly once");
+    }
+
+    @Test
+    void launchImageFunction_rewritesAwsEcrUriUsingRegistryManagerHostnameStyle() {
+        LambdaFunction fn = new LambdaFunction();
+        fn.setFunctionName("image-fn");
+        fn.setPackageType("Image");
+        fn.setImageUri("123456789012.dkr.ecr.us-east-1.amazonaws.com/backend-user:1");
+
+        when(ecrRegistryManager.getRepositoryUri("123456789012", "us-east-1", "backend-user:1"))
+                .thenReturn("123456789012.dkr.ecr.us-east-1.localhost:5100/backend-user:1");
+
+        launcher.launch(fn);
+
+        ArgumentCaptor<ContainerSpec> specCaptor = ArgumentCaptor.forClass(ContainerSpec.class);
+        verify(lifecycleManager).create(specCaptor.capture());
+        verify(ecrRegistryManager).ensureStarted();
+        verify(ecrRegistryManager).getRepositoryUri("123456789012", "us-east-1", "backend-user:1");
+        assertEquals("123456789012.dkr.ecr.us-east-1.localhost:5100/backend-user:1",
+                specCaptor.getValue().image());
+    }
+
+    @Test
+    void launchImageFunction_rewritesAwsEcrUriUsingRegistryManagerPathStyle() {
+        LambdaFunction fn = new LambdaFunction();
+        fn.setFunctionName("image-path-fn");
+        fn.setPackageType("Image");
+        fn.setImageUri("123456789012.dkr.ecr.us-east-1.amazonaws.com/backend-user:1");
+
+        when(ecrRegistryManager.getRepositoryUri("123456789012", "us-east-1", "backend-user:1"))
+                .thenReturn("localhost:5100/123456789012/us-east-1/backend-user:1");
+
+        launcher.launch(fn);
+
+        ArgumentCaptor<ContainerSpec> specCaptor = ArgumentCaptor.forClass(ContainerSpec.class);
+        verify(lifecycleManager).create(specCaptor.capture());
+        verify(ecrRegistryManager).ensureStarted();
+        verify(ecrRegistryManager).getRepositoryUri("123456789012", "us-east-1", "backend-user:1");
+        assertEquals("localhost:5100/123456789012/us-east-1/backend-user:1",
+                specCaptor.getValue().image());
     }
 
     @Test

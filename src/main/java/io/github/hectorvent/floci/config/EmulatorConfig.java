@@ -50,7 +50,7 @@ public interface EmulatorConfig {
     @WithDefault("000000000000")
     String defaultAccountId();
 
-    @WithDefault("512")
+    @WithDefault("2048")
     int maxRequestSize();
 
     @WithDefault("public.ecr.aws")
@@ -91,6 +91,32 @@ public interface EmulatorConfig {
          * </pre>
          */
         Optional<List<String>> extraSuffixes();
+
+        /**
+         * When {@code true} (default), the configured {@link #containerFallbackServers()} are
+         * appended after Floci's embedded DNS to every spawned container's {@code HostConfig.Dns}.
+         * This gives Lambda/CodeBuild/etc. a real secondary resolver so public hostnames still
+         * resolve if Floci's embedded forwarder cannot answer — mirroring the
+         * {@code docker run --dns <FlociIP> --dns 8.8.8.8} workaround.
+         *
+         * <p>Disable (via {@code FLOCI_DNS_CONTAINER_FALLBACK_ENABLED=false}) in offline or
+         * locked-down networks where the public resolvers are unreachable/blocked.
+         */
+        @WithDefault("true")
+        boolean containerFallbackEnabled();
+
+        /**
+         * Ordered list of public DNS resolvers used both as the fallback upstream for Floci's
+         * embedded DNS forwarder and (when {@link #containerFallbackEnabled()}) as the secondary
+         * resolvers injected into spawned containers.
+         *
+         * <p>Via environment variable (comma-separated):
+         * <pre>
+         * FLOCI_DNS_CONTAINER_FALLBACK_SERVERS=1.1.1.1,1.0.0.1
+         * </pre>
+         */
+        @WithDefault("8.8.8.8,8.8.4.4")
+        List<String> containerFallbackServers();
     }
 
     interface SecurityConfig {
@@ -141,11 +167,19 @@ public interface EmulatorConfig {
         AppConfigStorageConfig appconfig();
         AppConfigDataStorageConfig appconfigdata();
         ElastiCacheStorageConfig elasticache();
+        MemoryDbStorageConfig memorydb();
         RdsStorageConfig rds();
+        Ec2StorageConfig ec2();
         NeptuneStorageConfig neptune();
         BackupStorageConfig backup();
         CloudFrontStorageConfig cloudfront();
         AppSyncStorageConfig appsync();
+        BatchStorageConfig batch();
+        CodePipelineStorageConfig codepipeline();
+        S3VectorsStorageConfig s3vectors();
+        EcsStorageConfig ecs();
+        CodeBuildStorageConfig codebuild();
+        ConfigStorageConfig config();
     }
 
     interface SsmStorageConfig {
@@ -240,7 +274,18 @@ public interface EmulatorConfig {
         long flushIntervalMs();
     }
 
+    interface MemoryDbStorageConfig {
+        Optional<String> mode();
+
+        @WithDefault("5000")
+        long flushIntervalMs();
+    }
+
     interface RdsStorageConfig {
+        Optional<String> mode();
+    }
+
+    interface Ec2StorageConfig {
         Optional<String> mode();
     }
 
@@ -260,6 +305,48 @@ public interface EmulatorConfig {
     }
 
     interface AppSyncStorageConfig {
+        Optional<String> mode();
+
+        @WithDefault("5000")
+        long flushIntervalMs();
+    }
+
+    interface BatchStorageConfig {
+        Optional<String> mode();
+
+        @WithDefault("5000")
+        long flushIntervalMs();
+    }
+
+    interface CodePipelineStorageConfig {
+        Optional<String> mode();
+
+        @WithDefault("5000")
+        long flushIntervalMs();
+    }
+
+    interface S3VectorsStorageConfig {
+        Optional<String> mode();
+
+        @WithDefault("5000")
+        long flushIntervalMs();
+    }
+
+    interface EcsStorageConfig {
+        Optional<String> mode();
+
+        @WithDefault("5000")
+        long flushIntervalMs();
+    }
+
+    interface CodeBuildStorageConfig {
+        Optional<String> mode();
+
+        @WithDefault("5000")
+        long flushIntervalMs();
+    }
+
+    interface ConfigStorageConfig {
         Optional<String> mode();
 
         @WithDefault("5000")
@@ -294,8 +381,13 @@ public interface EmulatorConfig {
         IamServiceConfig iam();
         MskServiceConfig msk();
         ElastiCacheServiceConfig elasticache();
+        MemoryDbServiceConfig memorydb();
         RdsServiceConfig rds();
+        RdsDataServiceConfig rdsData();
         EventBridgeServiceConfig eventbridge();
+        CloudMapServiceConfig cloudmap();
+        EmrServiceConfig emr();
+        WafV2ServiceConfig wafv2();
         SchedulerServiceConfig scheduler();
         CloudWatchLogsServiceConfig cloudwatchlogs();
         CloudWatchMetricsServiceConfig cloudwatchmetrics();
@@ -324,9 +416,11 @@ public interface EmulatorConfig {
         ElbV2ServiceConfig elbv2();
         CodeBuildServiceConfig codebuild();
         CodeDeployServiceConfig codedeploy();
+        CodePipelineServiceConfig codepipeline();
         AutoScalingServiceConfig autoscaling();
         BackupServiceConfig backup();
         NeptuneServiceConfig neptune();
+        DocDbServiceConfig docdb();
         Route53ServiceConfig route53();
         TransferServiceConfig transfer();
         TextractServiceConfig textract();
@@ -337,8 +431,22 @@ public interface EmulatorConfig {
         CurServiceConfig cur();
         BcmDataExportsServiceConfig bcmDataExports();
         ConfigServiceConfig configservice();
+        CloudTrailServiceConfig cloudtrail();
         CloudFrontServiceConfig cloudfront();
         AppSyncServiceConfig appsync();
+        BatchServiceConfig batch();
+        UiServiceConfig ui();
+        S3VectorsServiceConfig s3vectors();
+    }
+
+    interface CloudTrailServiceConfig {
+        @WithDefault("true")
+        boolean enabled();
+    }
+
+    interface S3VectorsServiceConfig {
+        @WithDefault("true")
+        boolean enabled();
     }
 
     interface TransferServiceConfig {
@@ -388,7 +496,22 @@ public interface EmulatorConfig {
         Optional<String> dockerNetwork();
     }
 
+    interface BatchServiceConfig {
+        @WithDefault("true")
+        boolean enabled();
+
+        @WithDefault("immediate")
+        String runnerMode();
+
+        Optional<String> dockerNetwork();
+    }
+
     interface CodeDeployServiceConfig {
+        @WithDefault("true")
+        boolean enabled();
+    }
+
+    interface CodePipelineServiceConfig {
         @WithDefault("true")
         boolean enabled();
     }
@@ -408,7 +531,7 @@ public interface EmulatorConfig {
         @WithDefault("30")
         int defaultVisibilityTimeout();
 
-        @WithDefault("262144")
+        @WithDefault("1048576")
         int maxMessageSize();
 
         @WithDefault("false")
@@ -444,6 +567,9 @@ public interface EmulatorConfig {
 
         @WithDefault("false")
         boolean enforcementEnabled();
+
+        @WithDefault("false")
+        boolean seedDeployerPrincipal();
     }
 
     interface MskServiceConfig {
@@ -477,6 +603,26 @@ public interface EmulatorConfig {
         Optional<String> dockerNetwork();
     }
 
+    interface MemoryDbServiceConfig {
+        @WithDefault("true")
+        boolean enabled();
+
+        @WithDefault("false")
+        boolean mock();
+
+        @WithDefault("6400")
+        int proxyBasePort();
+
+        @WithDefault("6419")
+        int proxyMaxPort();
+
+        @WithDefault("valkey/valkey:8")
+        String defaultImage();
+
+        /** Docker network to attach MemoryDB containers to. Empty = default bridge. */
+        Optional<String> dockerNetwork();
+    }
+
     interface RdsServiceConfig {
         @WithDefault("true")
         boolean enabled();
@@ -500,6 +646,14 @@ public interface EmulatorConfig {
         Optional<String> dockerNetwork();
     }
 
+    interface RdsDataServiceConfig {
+        @WithDefault("true")
+        boolean enabled();
+
+        @WithDefault("180")
+        long transactionTtlSeconds();
+    }
+
     interface NeptuneServiceConfig {
         @WithDefault("true")
         boolean enabled();
@@ -512,13 +666,66 @@ public interface EmulatorConfig {
         @WithDefault("8282")
         int proxyMaxPort();
 
+        /**
+         * Backend graph engine and query language: {@code gremlin} (Apache TinkerPop, Gremlin
+         * over WebSocket) or {@code neo4j} (Neo4j, openCypher over Bolt). Mirrors LocalStack's
+         * {@code NEPTUNE_DB_TYPE}.
+         */
+        @WithDefault("gremlin")
+        String dbType();
+
+        /** Image used when {@code db-type=gremlin}. */
         @WithDefault("tinkerpop/gremlin-server:3.7.3")
+        String defaultImage();
+
+        /** Image used when {@code db-type=neo4j} (openCypher / Bolt). */
+        @WithDefault("neo4j:5-community")
+        String defaultNeo4jImage();
+
+        Optional<String> dockerNetwork();
+    }
+
+    interface DocDbServiceConfig {
+        @WithDefault("true")
+        boolean enabled();
+
+        @WithDefault("false")
+        boolean mock();
+
+        @WithDefault("mongo:7.0")
         String defaultImage();
 
         Optional<String> dockerNetwork();
     }
 
     interface EventBridgeServiceConfig {
+        @WithDefault("true")
+        boolean enabled();
+    }
+
+    interface CloudMapServiceConfig {
+        @WithDefault("true")
+        boolean enabled();
+
+        /** Delay before an async operation (CreateNamespace, RegisterInstance, …)
+         *  transitions from PENDING to SUCCESS. 0 = complete immediately. */
+        @WithDefault("0")
+        int operationCompletionDelaySeconds();
+    }
+
+    interface EmrServiceConfig {
+        @WithDefault("true")
+        boolean enabled();
+
+        @WithDefault("emr-7.5.0")
+        String defaultReleaseLabel();
+
+        /** Delay before a cluster reaches WAITING; 0 = advance synchronously. */
+        @WithDefault("0")
+        int clusterStartupDelaySeconds();
+    }
+
+    interface WafV2ServiceConfig {
         @WithDefault("true")
         boolean enabled();
     }
@@ -796,6 +1003,26 @@ public interface EmulatorConfig {
         String emitMode();
     }
 
+    interface UiServiceConfig {
+        @WithDefault("true")
+        boolean enabled();
+
+        @WithDefault("floci/floci-ui:latest")
+        String image();
+
+        @WithDefault("floci-ui")
+        String containerName();
+
+        /** Single fixed host port the UI is published on (single-instance service). */
+        @WithDefault("4500")
+        int port();
+
+        @WithDefault("false")
+        boolean keepRunningOnShutdown();
+
+        Optional<String> dockerNetwork();
+    }
+
     interface EcrServiceConfig {
         @WithDefault("true")
         boolean enabled();
@@ -988,6 +1215,27 @@ public interface EmulatorConfig {
 
         @WithDefault("false")
         boolean keepRunningOnShutdown();
+
+        /**
+         * Controls the endpoint that {@code describe-cluster} returns in real mode:
+         * <ul>
+         *   <li>{@code host} (default) — {@code https://localhost:<hostPort>}, reachable from the
+         *       host so {@code kubectl}/{@code aws eks} work out of the box.</li>
+         *   <li>{@code network} — the container DNS name {@code https://floci-eks-<name>:6443},
+         *       reachable from other containers on the Docker network (pre-#1118 behaviour). Falls
+         *       back to the host endpoint when Floci runs natively.</li>
+         * </ul>
+         */
+        @WithDefault("host")
+        String endpointMode();
+
+        /**
+         * When true, wires a token-authentication webhook into k3s so that the bearer token
+         * produced by {@code aws eks get-token} is validated by Floci and mapped to cluster-admin.
+         * This makes the native {@code aws eks update-kubeconfig} + {@code kubectl} flow work.
+         */
+        @WithDefault("true")
+        boolean iamAuthWebhook();
     }
 
     interface InitHooksConfig {

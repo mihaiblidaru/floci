@@ -12,6 +12,7 @@ import io.github.hectorvent.floci.services.eventbridge.model.Replay;
 import io.github.hectorvent.floci.services.eventbridge.model.Rule;
 import io.github.hectorvent.floci.services.eventbridge.model.RuleState;
 import io.github.hectorvent.floci.services.eventbridge.model.Target;
+import io.github.hectorvent.floci.services.resourcegroupstagging.ResourceGroupsTaggingService;
 import io.vertx.core.Vertx;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -48,7 +49,8 @@ class EventBridgeSchedulerIntegrationTest {
                 busStore, ruleStore, targetStore,
                 new InMemoryStorage<>(), new InMemoryStorage<>(), new InMemoryStorage<>(),
                 new RegionResolver(REGION, ACCOUNT),
-                new ObjectMapper(), scheduler, invoker, replayDispatcher);
+                new ObjectMapper(), scheduler, invoker, replayDispatcher,
+                new ResourceGroupsTaggingService());
     }
 
     @AfterEach
@@ -299,7 +301,16 @@ class EventBridgeSchedulerIntegrationTest {
             @Override
             public StorageConfig storage() { return null; }
             @Override
-            public DnsConfig dns() { return Optional::empty; }
+            public DnsConfig dns() {
+                return new DnsConfig() {
+                    @Override
+                    public Optional<List<String>> extraSuffixes() { return Optional.empty(); }
+                    @Override
+                    public boolean containerFallbackEnabled() { return true; }
+                    @Override
+                    public List<String> containerFallbackServers() { return List.of("8.8.8.8", "8.8.4.4"); }
+                };
+            }
             @Override
             public AuthConfig auth() { return null; }
             @Override
