@@ -14,7 +14,6 @@ import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
-import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
@@ -49,8 +48,7 @@ public class EksController {
 
   @GET
   @Path("/clusters")
-  public Response listClusters(@QueryParam("nextToken") String nextToken,
-      @QueryParam("maxResults") Integer maxResults) {
+  public Response listClusters() {
     List<String> clusterNames = eksService.listClusters();
     return Response.ok(Map.of("clusters", clusterNames)).build();
   }
@@ -78,9 +76,7 @@ public class EksController {
 
   @GET
   @Path("/clusters/{name}/nodegroups")
-  public Response listNodeGroups(@PathParam("name") String name,
-      @QueryParam("nextToken") String nextToken,
-      @QueryParam("maxResults") Integer maxResults) {
+  public Response listNodeGroups(@PathParam("name") String name) {
     List<String> nodeGroupNames = eksService.listNodeGroups(name);
     return Response.ok(Map.of("nodegroups", nodeGroupNames)).build();
   }
@@ -110,9 +106,7 @@ public class EksController {
 
   @GET
   @Path("/clusters/{name}/fargate-profiles")
-  public Response listFargateProfiles(@PathParam("name") String name,
-      @QueryParam("nextToken") String nextToken,
-      @QueryParam("maxResults") Integer maxResults) {
+  public Response listFargateProfiles(@PathParam("name") String name) {
     List<String> profileNames = eksService.listFargateProfiles(name);
     return Response.ok(Map.of("fargateProfileNames", profileNames)).build();
   }
