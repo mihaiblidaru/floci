@@ -4,6 +4,7 @@ import io.github.hectorvent.floci.config.EmulatorConfig;
 import io.github.hectorvent.floci.core.common.AwsException;
 import io.github.hectorvent.floci.core.common.RegionResolver;
 import io.github.hectorvent.floci.core.storage.InMemoryStorage;
+import io.github.hectorvent.floci.core.storage.StorageBackend;
 import io.github.hectorvent.floci.core.storage.StorageFactory;
 import io.github.hectorvent.floci.services.eks.model.ClusterStatus;
 import io.github.hectorvent.floci.services.eks.model.CreateClusterRequest;
@@ -14,41 +15,92 @@ import io.github.hectorvent.floci.services.eks.model.FargateProfileStatus;
 import io.github.hectorvent.floci.services.eks.model.Cluster;
 import io.github.hectorvent.floci.services.eks.model.NodeGroup;
 import io.github.hectorvent.floci.services.eks.model.NodeGroupStatus;
+import com.fasterxml.jackson.core.type.TypeReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.when;
 
 class EksServiceTest {
 
     private EksService eksService;
-    private EmulatorConfig config;
-    private EksClusterManager clusterManager;
 
     @BeforeEach
     void setUp() {
-        StorageFactory storageFactory = Mockito.mock(StorageFactory.class);
-        when(storageFactory.create(Mockito.anyString(), Mockito.anyString(), Mockito.any()))
-                .thenReturn(new InMemoryStorage<>(), new InMemoryStorage<>(), new InMemoryStorage<>());
+        StorageFactory storageFactory = new StorageFactory(null, null) {
+            @Override
+            public <V> StorageBackend<String, V> create(String serviceName, String fileName,
+                    TypeReference<Map<String, V>> typeReference) {
+                return new InMemoryStorage<>();
+            }
+        };
 
-        config = Mockito.mock(EmulatorConfig.class);
-        var servicesConfig = Mockito.mock(EmulatorConfig.ServicesConfig.class);
-        var eksConfig = Mockito.mock(EmulatorConfig.EksServiceConfig.class);
-
-        when(config.services()).thenReturn(servicesConfig);
-        when(servicesConfig.eks()).thenReturn(eksConfig);
-        when(eksConfig.mock()).thenReturn(true);
-        when(eksConfig.apiServerBasePort()).thenReturn(6500);
-        when(config.defaultRegion()).thenReturn("us-east-1");
-
-        clusterManager = Mockito.mock(EksClusterManager.class);
+        EmulatorConfig config = testConfig();
+        EksClusterManager clusterManager = null;
         RegionResolver regionResolver = new RegionResolver("us-east-1", "000000000000");
         eksService = new EksService(storageFactory, config, regionResolver, clusterManager);
+    }
+
+    private EmulatorConfig testConfig() {
+        EmulatorConfig.EksServiceConfig eksConfig = proxy(EmulatorConfig.EksServiceConfig.class,
+                (proxy, method, args) -> switch (method.getName()) {
+                    case "enabled", "mock" -> true;
+                    case "apiServerBasePort" -> 6500;
+                    default -> defaultValue(method);
+                });
+        EmulatorConfig.ServicesConfig servicesConfig = proxy(EmulatorConfig.ServicesConfig.class,
+                (proxy, method, args) -> switch (method.getName()) {
+                    case "eks" -> eksConfig;
+                    default -> defaultValue(method);
+                });
+        return proxy(EmulatorConfig.class, (proxy, method, args) -> switch (method.getName()) {
+            case "services" -> servicesConfig;
+            case "defaultRegion" -> "us-east-1";
+            case "defaultAccountId" -> "000000000000";
+            default -> defaultValue(method);
+        });
+    }
+
+    @SuppressWarnings("unchecked")
+    private <T> T proxy(Class<T> type, InvocationHandler handler) {
+        return (T) Proxy.newProxyInstance(type.getClassLoader(), new Class<?>[] { type }, (proxy, method, args) -> {
+            if (method.getDeclaringClass() == Object.class) {
+                return switch (method.getName()) {
+                    case "toString" -> type.getSimpleName() + "TestProxy";
+                    case "hashCode" -> System.identityHashCode(proxy);
+                    case "equals" -> proxy == args[0];
+                    default -> method.invoke(this, args);
+                };
+            }
+            return handler.invoke(proxy, method, args);
+        });
+    }
+
+    private Object defaultValue(Method method) {
+        Class<?> returnType = method.getReturnType();
+        if (returnType == boolean.class) {
+            return false;
+        }
+        if (returnType == int.class) {
+            return 0;
+        }
+        if (returnType == long.class) {
+            return 0L;
+        }
+        if (returnType == Optional.class) {
+            return Optional.empty();
+        }
+        if (returnType == String.class) {
+            return "";
+        }
+        return null;
     }
 
     private void createTestCluster(String name) {
